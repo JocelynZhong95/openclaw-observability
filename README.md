@@ -43,7 +43,20 @@ Both speak **OpenTelemetry**, so a single instrumentation layer in OpenClaw can 
 
 ## Status
 
-🌱 Early R&D. See [`docs/research.md`](docs/research.md) for the running literature review and [`docs/roadmap.md`](docs/roadmap.md) for milestones.
+🌱 Early R&D. **First trace verified in LangSmith UI 2026-06-03** — see `examples/`.
+
+### What works today
+- ✅ OTel → LangSmith export via OTLP/HTTP
+- ✅ Real LLM call through OpenClaw's `agent-maestro` gateway with token usage capture
+- ✅ Reusable tracer module (`src/tracer.mjs`) with `withSpan` helper
+- ✅ Monthly 5,000-trace quota guard (auto-disables export when exhausted)
+
+### Next
+- Hook into OpenClaw runtime (not standalone scripts) — design needed
+- Phoenix exporter fan-out
+- Streaming token accounting
+
+See [`docs/research.md`](docs/research.md) for the running literature review and [`docs/roadmap.md`](docs/roadmap.md) for milestones.
 
 ## Repo layout
 
