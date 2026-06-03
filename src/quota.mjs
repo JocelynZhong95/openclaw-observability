@@ -10,6 +10,7 @@ import { join, dirname } from 'node:path';
 const STATE_PATH = join(homedir(), '.openclaw', 'state', 'langsmith-quota.json');
 const DEFAULT_LIMIT = 5000;
 const WARN_AT = 0.9; // warn at 90%
+const ALERT_COOLDOWN_HOURS = 24; // don't spam same-threshold alerts
 
 function monthKey(d = new Date()) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -66,11 +67,33 @@ export function bump(limit = DEFAULT_LIMIT) {
   return state;
 }
 
-// CLI: node src/quota.mjs status | reset
+// CLI: node src/quota.mjs status | reset | check-alert
 const cmd = process.argv[2];
 if (cmd === 'status') {
   console.log(getStatus());
 } else if (cmd === 'reset') {
   save({ month: monthKey(), count: 0, warned: false });
   console.log('reset done');
+} else if (cmd === 'check-alert') {
+  // Returns JSON describing whether an alert should fire now.
+  // Used by cron: if .alert is non-empty, send to Feishu.
+  const s = getStatus();
+  const state = rollIfNewMonth(load());
+  const nowMs = Date.now();
+  const cooldownMs = ALERT_COOLDOWN_HOURS * 3600 * 1000;
+  let alert = null;
+  if (s.overLimit) {
+    if (!state.lastAlertExhausted || nowMs - state.lastAlertExhausted > cooldownMs) {
+      alert = { level: 'exhausted', text: `🛑 LangSmith 配额已用完：${s.used}/${s.limit}（${s.month}）。Trace 上报已自动暂停，下月 1 号重置。` };
+      state.lastAlertExhausted = nowMs;
+      save(state);
+    }
+  } else if (s.pct >= WARN_AT) {
+    if (!state.lastAlertWarn || nowMs - state.lastAlertWarn > cooldownMs) {
+      alert = { level: 'warn', text: `⚠️ LangSmith 配额已用 ${(s.pct * 100).toFixed(0)}%：${s.used}/${s.limit}（${s.month}）。剩 ${s.remaining}，超额后会自动暂停上报。` };
+      state.lastAlertWarn = nowMs;
+      save(state);
+    }
+  }
+  console.log(JSON.stringify({ status: s, alert }));
 }
